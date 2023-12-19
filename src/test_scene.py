@@ -52,6 +52,8 @@ class SceneBuilder(object):
         success = self.move_group.go(wait=True)
         self.move_group.stop()
         self.move_group.clear_pose_targets()
+        print('finished moving')
+
         current_pose = self.move_group.get_current_pose().pose
         display_trajectory = moveit_msgs.msg.DisplayTrajectory()
         display_trajectory.trajectory_start = self.robot.get_current_state()
@@ -61,10 +63,7 @@ class SceneBuilder(object):
         obj_pose.header.frame_id = "tool0"
         obj_pose.pose.orientation.w = 1.0
         obj_pose.pose.position.z = 0.6
-        self.scene.add_mesh('SettlementSystemFrontLeftHandMeshv2.stl_1', obj_pose, '//home/qcr/moveit_ws/src/cgras_robot_moveit/scene/meshes/visual/SettlementSystemFrontLeftHandMeshv2.stl')
-
-
-    
+ 
     def print_info(self):
         print(f'Planning frame: {self.move_group.get_planning_frame()}')
         print(f'End effector link: {self.move_group.get_end_effector_link()}')
