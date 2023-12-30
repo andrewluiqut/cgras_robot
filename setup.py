@@ -8,7 +8,7 @@ req_packages = [
 
 # fetch values from package.xml
 setup_args = generate_distutils_setup(
-    packages=['cgras_robot'],
+    packages=[''],
     package_dir={'': 'src'},
     python_requires='>=3.9',
     install_requires=req_packages
