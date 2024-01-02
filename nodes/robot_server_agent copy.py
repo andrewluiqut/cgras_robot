@@ -13,14 +13,13 @@ __status__ = 'Development'
 # general modules
 import os, json, random, signal, copy, glob, collections, sys, time, yaml, argparse
 # sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-#sys.path.append('/home/qcr/cgras_moveit_ws/devel/lib/python3/dist-packages')
 import rospy, actionlib
 import message_filters
 from std_msgs.msg import String
 # project modules
-import cgras_robot.msg
-from cgras_robot.msg import RobotAction, RobotGoal
-import cgras.robot_behaviours_test as robot_behaviours
+import cgras_robot.msg 
+from cgras_robot.msg import CalibrateAction, MoveAction, ResetAction, CalibrateGoal, MoveGoal, ResetGoal
+import robot_behaviours
 # py_trees
 import py_trees
 import py_trees.console as console
@@ -32,21 +31,26 @@ class RobotControlAgent():
     def __init__(self):
         # - create the stop signal handler
         signal.signal(signal.SIGINT, self.stop)
-        
+
         rospy.on_shutdown(self.cb_shutdown)
         self.state_pub = rospy.Publisher('/cgras/robot/state', String, queue_size=1)
         # create demo action servers for every action
         # create action server: Calibrate.action
-        self.action_server_robot = actionlib.SimpleActionServer('/cgras/robot/do', 
-                            cgras_robot.msg.RobotAction, execute_cb=self.received_goal, auto_start=False)
-        self.action_server_robot.register_preempt_callback(self.received_preemption)
-        self.action_server_robot.start()
-
+        self.action_server_calibrate = actionlib.SimpleActionServer('/cgras/robot/calibrate', 
+                            cgras_robot.msg.CalibrateAction, execute_cb=self.calibrate_received_goal, auto_start=False)
+        self.action_server_calibrate.start()
+        # create action server: Move.action
+        self.action_server_move= actionlib.SimpleActionServer('/cgras/robot/move', 
+                            cgras_robot.msg.MoveAction, execute_cb=self.move_received_goal, auto_start=False)
+        self.action_server_move.start()
+        # create action server: Reset.action
+        self.action_server_reset = actionlib.SimpleActionServer('/cgras/robot/reset', 
+                            cgras_robot.msg.ResetAction, execute_cb=self.reset_received_goal, auto_start=False)
+        self.action_server_reset.start()
         # starts the timer at the end
         self.timer = rospy.Timer(rospy.Duration(1), self.cb_timer)
-        
-        # log_tree.level = log_tree.Level.DEBUG
-        
+
+        log_tree.level = log_tree.Level.DEBUG
         # connect to blackboard
         self.blackboard = py_trees.blackboard.Blackboard()
         # starts the behavior tree
@@ -68,8 +72,7 @@ class RobotControlAgent():
         #             time.sleep(0.5)
         #     except KeyboardInterrupt:
         #         break
-        bt.tick_tock(period_ms=500)
-        
+        bt.tick_tock(0.5)
 
     def epilog(self):
         if py_trees.console.has_colours:
@@ -106,49 +109,42 @@ class RobotControlAgent():
     def cb_timer(self, event):
         self._publish_state()
 
-    # -- callback for receiving the goal of action
-    def received_goal(self, goal):
-        rospy.loginfo(f'goal received: {goal}')
-        if goal.target == RobotGoal.CALIBRATE:
-            print('Calibrate')
-            rospy.sleep(rospy.Duration(secs=5))
-        action_feedback = cgras_robot.msg.RobotFeedback()
-        result = cgras_robot.msg.RobotResult()
-        if self.action_server_robot.is_preempt_requested():
-            print('preempt requested')
-        else:
-            self.action_server_robot.set_succeeded(result)
-    
-    # -- callback for receiving preemption of the goal
-    def received_preemption(self):
-        rospy.loginfo(f'preemption received')
-        result = cgras_robot.msg.RobotResult()
-        self.action_server_robot.set_aborted(result)
+    # -- callback for receiving the goal of action: Calibrate
+    def calibrate_received_goal(self, goal):
+        rospy.loginfo(f'calibrate goal received')
+        action_feedback = cgras_robot.msg.CalibrateFeedback()
+        result = cgras_robot.msg.CalibrateResult()
+        # if somekindoferror:
+        #     self.action_server_calibrate.set_aborted(result)
+        result.location = '1'  # the apriltag ID
+        result.error = ''
+        self.action_server_calibrate.set_succeeded(result)
+        
 
     # -- callback for receiving the goal of action: Move
-    # def move_received_goal(self, goal):
-    #     rospy.loginfo(f'move goal received: grid cell ({goal.grid_x} {goal.grid_y}) of tile ({goal.tile_x} {goal.tile_y})')
-    #     action_feedback = cgras_robot.msg.MoveFeedback()
-    #     result = cgras_robot.msg.MoveResult()
-    #     self.blackboard.set('goal', 'move')
-    #     rospy.loginfo(f'set blackboard: {self.blackboard.get("goal")}')
-    #     # if somekindoferror:
-    #     #     self.action_server_calibrate.set_aborted(result)        
-    #     result.error = ''
-    #     self.action_server_move.set_succeeded(result)
+    def move_received_goal(self, goal):
+        rospy.loginfo(f'move goal received: grid cell ({goal.grid_x} {goal.grid_y}) of tile ({goal.tile_x} {goal.tile_y})')
+        action_feedback = cgras_robot.msg.MoveFeedback()
+        result = cgras_robot.msg.MoveResult()
+        self.blackboard.set('goal', 'move')
+        rospy.loginfo(f'set blackboard: {self.blackboard.get("goal")}')
+        # if somekindoferror:
+        #     self.action_server_calibrate.set_aborted(result)        
+        result.error = ''
+        self.action_server_move.set_succeeded(result)
 
 
-    # # -- callback for receiving the goal of action: Reset
-    # def reset_received_goal(self, goal):
-    #     rospy.loginfo(f'reset goal received: {goal.pose}') # example poses include 'stow', 'recovery_1', etc
-    #     action_feedback = cgras_robot.msg.ResetFeedback()
-    #     result = cgras_robot.msg.ResetResult()
-    #     self.blackboard.set('goal', 'reset')
-    #     rospy.loginfo(f'set blackboard: {self.blackboard.get("goal")}')
-    #     # if somekindoferror:
-    #     #     self.action_server_calibrate.set_aborted(result)
-    #     result.error = ''
-    #     self.action_server_reset.set_succeeded(result)   
+    # -- callback for receiving the goal of action: Reset
+    def reset_received_goal(self, goal):
+        rospy.loginfo(f'reset goal received: {goal.pose}') # example poses include 'stow', 'recovery_1', etc
+        action_feedback = cgras_robot.msg.ResetFeedback()
+        result = cgras_robot.msg.ResetResult()
+        self.blackboard.set('goal', 'reset')
+        rospy.loginfo(f'set blackboard: {self.blackboard.get("goal")}')
+        # if somekindoferror:
+        #     self.action_server_calibrate.set_aborted(result)
+        result.error = ''
+        self.action_server_reset.set_succeeded(result)   
 
 # ----- the main program
 if __name__ == '__main__':

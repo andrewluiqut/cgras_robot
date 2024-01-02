@@ -1,4 +1,5 @@
 from time import sleep
+import operator
 import rospy
 import py_trees
 from py_trees.behaviour import Behaviour
@@ -44,22 +45,22 @@ class MoveAction(Behaviour):
     rospy.loginfo(f'MoveAction::terminate {self.name} to {new_status}')
 
 def create_bt():
-    root_selector = py_trees.composites.Selector('root')
-    reset_branch = py_trees.composites.Sequence('reset_branch')
-    reset_branch.add_children([
-        py_trees.blackboard.CheckBlackboardVariable(name='check_reset_goal', variable_name='goal', expected_value='reset'),
-        ResetAction('do_reset')
-    ])
-    move_branch = py_trees.composites.Sequence('move_branch')
+    root_selector = py_trees.composites.Selector('root', memory=False)
+    move_branch = py_trees.composites.Sequence('move_branch', memory=False)
     move_timeout_checker = py_trees.decorators.Timeout(
         duration=2,
         name='move_timeout_checker',
-        child=py_trees.blackboard.CheckBlackboardVariable(name='check_move_goal', variable_name='goal', expected_value='move')
+        child=py_trees.behaviours.CheckBlackboardVariableValue(name='check_move_goal', 
+          check=py_trees.common.ComparisonExpression(
+              variable="event_cancel_button",
+              value=True,
+              operator=operator.eq)
+          )
     )
     move_branch.add_children([
         move_timeout_checker,
         MoveAction('do_move')
     ])
-    root_selector.add_children([reset_branch, move_branch])
+    root_selector.add_children([move_branch])
     root_tree = BehaviourTree(root_selector)
     return root_tree    
