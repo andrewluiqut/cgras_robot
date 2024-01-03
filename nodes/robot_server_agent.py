@@ -20,12 +20,12 @@ from std_msgs.msg import String
 # project modules
 import cgras_robot.msg
 from cgras_robot.msg import RobotAction, RobotGoal
-import cgras.robot_behaviours_test as robot_behaviours
+import cgras.robot_control.robot_behaviours as robot_behaviours
 # py_trees
 import py_trees
 import py_trees.console as console
 from py_trees import logging as log_tree
-
+from py_trees.trees import BehaviourTree
 
 class RobotControlAgent():
 
@@ -45,12 +45,12 @@ class RobotControlAgent():
         # starts the timer at the end
         self.timer = rospy.Timer(rospy.Duration(1), self.cb_timer)
         
-        # log_tree.level = log_tree.Level.DEBUG
+        log_tree.level = log_tree.Level.DEBUG
         
         # connect to blackboard
         self.blackboard = py_trees.blackboard.Blackboard()
         # starts the behavior tree
-        bt = robot_behaviours.create_bt()
+        bt:BehaviourTree = robot_behaviours.create_bt()
         # bt.tick_once()
         # args = self.command_line_argument_parser().parse_args()
         # py_trees.display.render_dot_tree(bt)
@@ -69,23 +69,7 @@ class RobotControlAgent():
         #     except KeyboardInterrupt:
         #         break
         bt.tick_tock(period_ms=500)
-        
 
-    def epilog(self):
-        if py_trees.console.has_colours:
-            return console.cyan + "And his noodly appendage reached forth to tickle the blessed...\n" + console.reset
-        else:
-            return None
-
-    def command_line_argument_parser(self):
-        parser = argparse.ArgumentParser(description='robot server agent',
-                                        epilog=self.epilog(),
-                                        formatter_class=argparse.RawDescriptionHelpFormatter,
-                                        )
-        group = parser.add_mutually_exclusive_group()
-        group.add_argument('-r', '--render', action='store_true', help='render dot tree to file')
-        group.add_argument('-i', '--interactive', action='store_true', help='pause and wait for keypress at each tick')
-        return parser
 
     # -- callback function for shutdown
     def cb_shutdown(self):
@@ -110,12 +94,21 @@ class RobotControlAgent():
     def received_goal(self, goal):
         rospy.loginfo(f'goal received: {goal}')
         if goal.target == RobotGoal.CALIBRATE:
-            print('Calibrate')
-            rospy.sleep(rospy.Duration(secs=5))
+            self.blackboard.set('goal', 'calibrate')
+        elif goal.target == RobotGoal.MOVE_TO_STOW:
+            self.blackboard.set('goal', 'reset')
+            self.blackboard.set('target', 'stow')
+        elif goal.target == RobotGoal.MOVE_TO_HOME:
+            self.blackboard.set('goal', 'reset')
+            self.blackboard.set('target', 'home')
+        elif goal.target == RobotGoal.MOVE_TO_CELL:
+            self.blackboard.set('goal', 'move')
+        
         action_feedback = cgras_robot.msg.RobotFeedback()
         result = cgras_robot.msg.RobotResult()
         if self.action_server_robot.is_preempt_requested():
             print('preempt requested')
+            self.action_server_robot.set_aborted(result)
         else:
             self.action_server_robot.set_succeeded(result)
     
@@ -123,32 +116,7 @@ class RobotControlAgent():
     def received_preemption(self):
         rospy.loginfo(f'preemption received')
         result = cgras_robot.msg.RobotResult()
-        self.action_server_robot.set_aborted(result)
 
-    # -- callback for receiving the goal of action: Move
-    # def move_received_goal(self, goal):
-    #     rospy.loginfo(f'move goal received: grid cell ({goal.grid_x} {goal.grid_y}) of tile ({goal.tile_x} {goal.tile_y})')
-    #     action_feedback = cgras_robot.msg.MoveFeedback()
-    #     result = cgras_robot.msg.MoveResult()
-    #     self.blackboard.set('goal', 'move')
-    #     rospy.loginfo(f'set blackboard: {self.blackboard.get("goal")}')
-    #     # if somekindoferror:
-    #     #     self.action_server_calibrate.set_aborted(result)        
-    #     result.error = ''
-    #     self.action_server_move.set_succeeded(result)
-
-
-    # # -- callback for receiving the goal of action: Reset
-    # def reset_received_goal(self, goal):
-    #     rospy.loginfo(f'reset goal received: {goal.pose}') # example poses include 'stow', 'recovery_1', etc
-    #     action_feedback = cgras_robot.msg.ResetFeedback()
-    #     result = cgras_robot.msg.ResetResult()
-    #     self.blackboard.set('goal', 'reset')
-    #     rospy.loginfo(f'set blackboard: {self.blackboard.get("goal")}')
-    #     # if somekindoferror:
-    #     #     self.action_server_calibrate.set_aborted(result)
-    #     result.error = ''
-    #     self.action_server_reset.set_succeeded(result)   
 
 # ----- the main program
 if __name__ == '__main__':
