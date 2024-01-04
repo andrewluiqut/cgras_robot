@@ -19,8 +19,8 @@ import message_filters
 from std_msgs.msg import String
 # project modules
 import cgras_robot.msg
-from cgras_robot.msg import RobotAction, RobotGoal
-import cgras.robot_control.robot_behaviours as robot_behaviours
+from cgras_robot.msg import RobotCommandAction, RobotCommandGoal
+from cgras.robot_control.robot_behaviours import RobotBehaviorsManager
 # py_trees
 import py_trees
 import py_trees.console as console
@@ -38,7 +38,7 @@ class RobotControlAgent():
         # create demo action servers for every action
         # create action server: Calibrate.action
         self.action_server_robot = actionlib.SimpleActionServer('/cgras/robot/do', 
-                            cgras_robot.msg.RobotAction, execute_cb=self.received_goal, auto_start=False)
+                            cgras_robot.msg.RobotCommandAction, execute_cb=self.received_goal, auto_start=False)
         self.action_server_robot.register_preempt_callback(self.received_preemption)
         self.action_server_robot.start()
 
@@ -47,29 +47,8 @@ class RobotControlAgent():
         
         log_tree.level = log_tree.Level.DEBUG
         
-        # connect to blackboard
-        self.blackboard = py_trees.blackboard.Blackboard()
-        # starts the behavior tree
-        bt:BehaviourTree = robot_behaviours.create_bt()
-        # bt.tick_once()
-        # args = self.command_line_argument_parser().parse_args()
-        # py_trees.display.render_dot_tree(bt)
-        # if args.interactive:
-        #     unused_result = py_trees.console.read_single_keypress()
-        # while True:
-        #     try:
-        #         rospy.logerr('tick')
-        #         bt.tick_once()
-        #         py_trees.display.print_ascii_tree(bt, show_status=True)
-        #         if args.interactive:
-        #             rospy.logerr('Press Enter')
-        #             unused_result = py_trees.console.read_single_keypress()
-        #         else:
-        #             time.sleep(0.5)
-        #     except KeyboardInterrupt:
-        #         break
-        bt.tick_tock(period_ms=500)
-
+        self.robot_manager = RobotBehaviorsManager()
+        self.robot_manager.spin()
 
     # -- callback function for shutdown
     def cb_shutdown(self):
@@ -93,19 +72,20 @@ class RobotControlAgent():
     # -- callback for receiving the goal of action
     def received_goal(self, goal):
         rospy.loginfo(f'goal received: {goal}')
-        if goal.target == RobotGoal.CALIBRATE:
+        action = goal.target[0]
+        if goal.target == RobotCommandGoal.ACTION_CALIBRATE:
             self.blackboard.set('goal', 'calibrate')
-        elif goal.target == RobotGoal.MOVE_TO_STOW:
-            self.blackboard.set('goal', 'reset')
-            self.blackboard.set('target', 'stow')
-        elif goal.target == RobotGoal.MOVE_TO_HOME:
-            self.blackboard.set('goal', 'reset')
-            self.blackboard.set('target', 'home')
-        elif goal.target == RobotGoal.MOVE_TO_CELL:
-            self.blackboard.set('goal', 'move')
+        elif goal.target == RobotCommandGoal.ACTION_MOVE_NAME:
+            named_pose = goal.target[1]
+            self.blackboard.set('goal', 'move_posename')
+            self.blackboard.set('target', named_pose)
+        elif goal.target == RobotCommandGoal.ACTION_MOVE_CELL:
+            position = goal.target[1:5]
+            self.blackboard.set('goal', 'move_cell')
+            self.blackboard.set('target', position)
         
-        action_feedback = cgras_robot.msg.RobotFeedback()
-        result = cgras_robot.msg.RobotResult()
+        action_feedback = cgras_robot.msg.RobotCommandFeedback()
+        result = cgras_robot.msg.RobotCommandResult()
         if self.action_server_robot.is_preempt_requested():
             print('preempt requested')
             self.action_server_robot.set_aborted(result)
@@ -115,7 +95,7 @@ class RobotControlAgent():
     # -- callback for receiving preemption of the goal
     def received_preemption(self):
         rospy.loginfo(f'preemption received')
-        result = cgras_robot.msg.RobotResult()
+        result = cgras_robot.msg.RobotCommandResult()
 
 
 # ----- the main program
