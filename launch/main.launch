@@ -2,29 +2,23 @@
     <arg name="namespace" default="cgras" doc="The namespace for the project" />
     <arg name="use_gui" default="false" />
     <arg name="use_rviz" default="true" />
-    <arg name="sim_robot" default="false" />  
-    <arg name="use_controller" default="true" />    
+    <arg name="sim_robot" default="false" /> 
+    <arg name="default" default="true" />  
+    <arg name="objects_config" default="$(find cgras_robot)/config/objects.yaml" />  
 
-    <group ns="$(arg namespace)">
-        <param name="use_controller" type="boolean" value="$(arg use_controller)" /> 
-        <param name="sim_robot" type="boolean" value="$(arg sim_robot)" />
-        <!-- Launch the camera monitor node first, which will launch the camera agent -->
-        <!-- <group if="$(arg sim_camera)"> 
-            <param name="use_camera" type="boolean" value="$(arg use_camera)" /> 
-            <node pkg="cgras_camera_agent" type="camera_node_monitor.py" name="camera_node_monitor" output="screen" respawn="true" >
-            </node>
-        </group> -->
-       <!-- Launch the (simulated) robot node -->
-        <group if="$(arg use_controller)">
-            <node pkg="cgras_robot" type="robot_behaviours.py" name="robot_server_agent" output="screen">
-            </node>
-        </group>
-        <group if="$(arg sim_robot)">
-            <include file="$(find cgras_scene_config)/launch/demo.launch">
-                <arg name="use_gui" default="$(arg use_gui)" />
-                <arg name="use_rviz" default="$(arg use_rviz)" />
-            </include>
-        </group>
+    <!-- Launch the (simulated) robot node -->
+    <group if="$(arg default)">
+        <node pkg="cgras_robot" type="robot_server_agent.py" name="robot_server_agent" output="screen">
+        </node>
+        <!-- <node pkg="cgras_robot" type="robot_behaviours_node.py" name="robot_behaviours_node" output="screen">
+        </node>         -->
+    </group>
+
+    <group if="$(arg sim_robot)">
+        <include file="$(find cgras_scene_config)/launch/demo.launch">
+            <arg name="use_gui" default="$(arg use_gui)" />
+            <arg name="use_rviz" default="$(arg use_rviz)" />
+        </include>
     </group>
 
 

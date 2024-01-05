@@ -1,0 +1,17 @@
+<launch>
+    <arg name="namespace" default="cgras" doc="The namespace for the project" />
+    <arg name="use_gui" default="true" />
+    <arg name="use_rviz" default="true" />
+    <arg name="sim_robot" default="false" />  
+    <arg name="start_server" default="true" />  
+    <arg name="objects_config" default="$(find cgras_robot)/config/objects.yaml" />  
+
+    <include file="$(find cgras_robot)/launch/main.launch">
+        <arg name="namespace" default="cgras" doc="The namespace for the project" />
+        <arg name="use_gui" default="$(arg use_gui)" />
+        <arg name="use_rviz" default="$(arg use_rviz)" />
+        <arg name="sim_robot" default="false" />     
+        <arg name="start_server" default="true" />  
+        <arg name="objects_config" default="$(arg objects_config)" />
+    </include>
+</launch>

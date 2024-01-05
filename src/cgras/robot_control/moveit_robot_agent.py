@@ -79,7 +79,7 @@ class MoveitRobotAgent():
         return self.agent_state      
     
     def cb_move_group_feedback(self, msg:MoveGroupActionFeedback):
-        rospy.loginfo(f'feedback: {msg}')
+        rospy.logdebug(f'feedback: {msg}')
         self.cached_feedback = msg
         if self.agent_state == RobotAgentStates.BUSY:
             if msg.status.status in [GoalStatus.SUCCEEDED]:
@@ -399,7 +399,7 @@ if __name__ == '__main__':
     moveit_commander.roscpp_initialize(sys.argv)
     rospy.init_node("robot_control_agent", anonymous=True)
     signal.signal(signal.SIGINT, stop)
-    # rospy.on_shutdown(cb_shutdown)
+    rospy.on_shutdown(cb_shutdown)
     try:
         robot_agent = MoveitRobotAgent()
         robot_agent.current_joint_positions(print=True)

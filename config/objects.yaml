@@ -1,0 +1,9 @@
+attached_objects:
+- object_name: the_tank
+  id: '12'
+  model_file: /home/qcr/cgras_moveit_ws/src/cgras_scene/meshes/collision/SettlementSystemRight.stl
+  scale: [0.001, 0.001, 0.001]
+  pose:
+    xyz: [0.6, -0.85, 0]
+    rpy: [0, 0, 1.57]
+  attach_to: trolley
