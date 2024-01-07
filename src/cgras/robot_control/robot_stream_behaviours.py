@@ -33,9 +33,9 @@ class RobotStates(Enum):
     WORKING = 2
     FAULT = 3
 
-class Do_Calibrate(Behaviour):
+class DoCalibrate(Behaviour):
     def __init__(self, name):
-        super(Do_Calibrate, self).__init__(name)
+        super(DoCalibrate, self).__init__(name)
         # load config
         objects_config_file = rospy.get_param(f'/cgras/objects_config', 
             default=os.path.join(os.path.dirname(__file__), '../../../config/objects.yaml'))
@@ -44,12 +44,6 @@ class Do_Calibrate(Behaviour):
         # attach to blackboard
         self.blackboard = self.attach_blackboard_client()
         self.blackboard.register_key(key='goal_result', access=py_trees.common.Access.WRITE)
-        
-    def setup(self):
-        pass
-
-    def initialise(self):
-        pass
 
     def update(self):
         rospy.loginfo("Calibration started")
@@ -69,36 +63,61 @@ class Do_Calibrate(Behaviour):
         self.logger.debug(f"Do_Calibrate::terminate {self.name} to {new_status}")
 
 
-class DoMovePoseName(Behaviour):
-    def __init__(self, name):
-        super(DoMovePoseName, self).__init__(name)
-        # attach to blackboard
-        self.blackboard = self.attach_blackboard_client()
-        self.blackboard.register_key(key='goal_params', access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key='goal_result', access=py_trees.common.Access.WRITE)
+class DoMovePose(Behaviour):
+    def __init__(self, name, condition_fn=True, posename='home'):
+        super(DoMovePose, self).__init__(name)
+        self.condition_fn = condition_fn
+        self.posename = posename
+        
+    def initialise(self):
+        ROBOT_AGENT.abort_move()
+        ROBOT_AGENT.reset()
+        
+    def update(self):
+        if (type(self.condition_fn) == bool and not self.condition_fn) or \
+            (hasattr(self.condition_fn, '__call__') and not self.condition_fn()):
+                return Status.SUCCESS
+        agent_state = ROBOT_AGENT.get_agent_state()
+        rospy.loginfo(f'update: agent state: {agent_state.name} behaviour status: {self.status.name}')
+        if agent_state in [RobotAgentStates.READY]:
+            ROBOT_AGENT.move_to_named_pose(self.posename, wait=False)
+            rospy.loginfo(f'started move to named pose: {self.posename}')   
+            return Status.RUNNING   
+        elif agent_state == RobotAgentStates.BUSY:
+            return Status.RUNNING
+        elif agent_state == RobotAgentStates.SUCCEEDED:
+            self.blackboard.goal_result = 'SUCCESS'
+            return Status.SUCCESS
+        elif agent_state == RobotAgentStates.ABORTED:
+            self.blackboard.goal_result = 'FAILED'
+            return Status.FAILURE
+        
+    def terminate(self, new_status):
+        rospy.loginfo(f"DoMovePose: terminate {self.name} to {new_status}")
 
-    def setup(self):
-        pass
+class DoMoveHoverPose(Behaviour):
+    def __init__(self, name, condition_fn=True, work_pose=[0, 0, 0, 0]):
+        super(DoMoveHoverPose, self).__init__(name)
+        self.condition_fn = condition_fn
+        self.work_pose = work_pose
 
     def initialise(self):
-        rospy.loginfo(f'DoMovePoseName: initialize')
         ROBOT_AGENT.abort_move()
         ROBOT_AGENT.reset()
 
     def update(self):
+        if (type(self.condition_fn) == bool and not self.condition_fn) or \
+            (hasattr(self.condition_fn, '__call__') and not self.condition_fn()):
+                return Status.SUCCESS
         agent_state = ROBOT_AGENT.get_agent_state()
         rospy.loginfo(f'update: agent state: {agent_state.name} behaviour status: {self.status.name}')
         if agent_state in [RobotAgentStates.READY]:
-            target_pose = self.blackboard.goal_params[0]
-            if target_pose == RobotCommandGoal.POSENAME_STOW:
-                named_pose = 'stow'
-            elif target_pose == RobotCommandGoal.POSENAME_HOME:
-                named_pose = 'home'
-            else:
-                self.blackboard.goal_result = 'INVALID POSE'
+            if self.work_pose is None or len(self.work_pose) != 4:
+                self.blackboard.goal_result = 'INVALID POSE SPEC'
                 return Status.FAILURE
-            ROBOT_AGENT.move_to_named_pose(named_pose, wait=False)
-            rospy.loginfo(f'started move to named pose: {named_pose}')   
+            target_pose_as_list = self.scangrid_model.get_work_pose_as_list(self.work_pose)
+            ROBOT_AGENT.move_to_position_and_orientation(target_pose_as_list, wait=False)
+            rospy.loginfo(f'started move to pose: {target_pose_as_list}')   
             return Status.RUNNING   
         elif agent_state == RobotAgentStates.BUSY:
             return Status.RUNNING
@@ -110,35 +129,33 @@ class DoMovePoseName(Behaviour):
             return Status.FAILURE
 
     def terminate(self, new_status):
-        rospy.loginfo(f"DoMovePoseName: terminate {self.name} to {new_status}")
+        rospy.loginfo(f"DoMoveCell: terminate {self.name} to {new_status}")
 
+class Movement(Enum):
+    UP = 0
+    DOWN = 1
 
-class DoMoveCell(Behaviour):
-    def __init__(self, name):
-        super(DoMoveCell, self).__init__(name)
-        # attach to blackboard
-        self.blackboard = self.attach_blackboard_client()
-        self.blackboard.register_key(key='goal_params', access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key='goal_result', access=py_trees.common.Access.WRITE)
-        # the tank model
-        self.scangrid_model = WorkAreaModel()
-    def setup(self):
-        pass
+class DoMoveUpDown(Behaviour):
+    def __init__(self, name, condition_fn=True, direction=Movement.UP):
+        super(DoMoveUpDown, self).__init__(name)
+        self.condition_fn = condition_fn
+        self.direction = direction
 
     def initialise(self):
-        self.logger.debug(f"DoMoveCell: initialise {self.name}")
         ROBOT_AGENT.abort_move()
         ROBOT_AGENT.reset()
 
     def update(self):
+        if (type(self.condition_fn) == bool and not self.condition_fn) or \
+            (hasattr(self.condition_fn, '__call__') and not self.condition_fn()):
+                return Status.SUCCESS
         agent_state = ROBOT_AGENT.get_agent_state()
         rospy.loginfo(f'update: agent state: {agent_state.name} behaviour status: {self.status.name}')
         if agent_state in [RobotAgentStates.READY]:
-            target_pose = self.blackboard.goal_params
-            if target_pose is None or len(target_pose) != 4:
+            if self.direction not in [Movement.UP, Movement.DOWN]:
                 self.blackboard.goal_result = 'INVALID POSE SPEC'
                 return Status.FAILURE
-            target_pose_as_list = self.scangrid_model.get_work_pose_as_list(target_pose)
+            target_pose_as_list = self.scangrid_model.get_work_pose_as_list(self.work_pose)
             ROBOT_AGENT.move_to_position_and_orientation(target_pose_as_list, wait=False)
             rospy.loginfo(f'started move to pose: {target_pose_as_list}')   
             return Status.RUNNING   
@@ -155,52 +172,10 @@ class DoMoveCell(Behaviour):
         rospy.loginfo(f"DoMoveCell: terminate {self.name} to {new_status}")
 
 
-class DoMoveFixedName(Behaviour):
-    def __init__(self, name, posename):
-        super(DoMoveFixedName, self).__init__(name)
-        # attach to blackboard
-        self.blackboard = self.attach_blackboard_client()
-        self.blackboard.register_key(key='goal_params', access=py_trees.common.Access.READ)
-        self.blackboard.register_key(key='goal_result', access=py_trees.common.Access.WRITE)
-        # store the pose name
-        self.posename = posename
-    def setup(self):
-        pass
-
-    def initialise(self):
-        rospy.loginfo(f'DoMovePoseName: initialize')
-        ROBOT_AGENT.abort_move()
-        ROBOT_AGENT.reset()
-
-    def update(self):
-        agent_state = ROBOT_AGENT.get_agent_state()
-        rospy.loginfo(f'update: agent state: {agent_state.name} behaviour status: {self.status.name}')
-        if agent_state in [RobotAgentStates.READY]:
-            target_pose = self.blackboard.goal_params[0]
-            if target_pose == RobotCommandGoal.POSENAME_STOW:
-                named_pose = 'stow'
-            elif target_pose == RobotCommandGoal.POSENAME_HOME:
-                named_pose = 'home'
-            else:
-                self.blackboard.goal_result = 'INVALID POSE'
-                return Status.FAILURE
-            ROBOT_AGENT.move_to_named_pose(named_pose, wait=False)
-            rospy.loginfo(f'started move to named pose: {named_pose}')   
-            return Status.RUNNING   
-        elif agent_state == RobotAgentStates.BUSY:
-            return Status.RUNNING
-        elif agent_state == RobotAgentStates.SUCCEEDED:
-            self.blackboard.goal_result = 'SUCCESS'
-            return Status.SUCCESS
-        elif agent_state == RobotAgentStates.ABORTED:
-            self.blackboard.goal_result = 'FAILED'
-            return Status.FAILURE
-
-    def terminate(self, new_status):
-        rospy.loginfo(f"DoMovePoseName: terminate {self.name} to {new_status}")
-
-# -- Global Variable
+# -- Global Variables
 ROBOT_AGENT = MoveitRobotAgent()
+WORKAREA_MODEL = WorkAreaModel()
+
 # -- Definition of the main behavior tree
 class RobotBehaviorsManager:
     def __init__(self):
@@ -248,7 +223,7 @@ class RobotBehaviorsManager:
                     py_trees.decorators.FailureIsSuccess(
                         name='calibrate_decorator', 
                         child=py_trees.decorators.StatusToBlackboard(
-                            name='status_recorder', child=Do_Calibrate("do_calibrate"),
+                            name='status_recorder', child=DoCalibrate("do_calibrate"),
                             variable_name='status')
                     ),
                     py_trees.behaviours.UnsetBlackboardVariable(
@@ -298,7 +273,7 @@ class RobotBehaviorsManager:
             name="move_cell_branch_timeout",
             child=py_trees.composites.Sequence(
                 "move_cell_branch",
-                memory=True,
+                memory=False,
                 children=[
                     check_move_cell_node,
                     DoMoveCell("do_move"),

@@ -67,6 +67,9 @@ catkin_python_setup()
 add_action_files( 
   FILES 
   RobotCommand.action
+  Calibrate.action
+  Move.action
+  Reset.action
 ) 
 
 ## Generate added messages and services with any dependencies listed here

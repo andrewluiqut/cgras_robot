@@ -5,13 +5,14 @@
     <arg name="sim_robot" default="false" /> 
     <arg name="default" default="true" />  
     <arg name="objects_config" default="$(find cgras_robot)/config/objects.yaml" />  
+    <arg name="workarea_config" default="$(find cgras_robot)/config/workarea.yaml" />    
 
     <!-- Launch the (simulated) robot node -->
     <group if="$(arg default)">
         <node pkg="cgras_robot" type="robot_server_agent.py" name="robot_server_agent" output="screen">
         </node>
-        <!-- <node pkg="cgras_robot" type="robot_behaviours_node.py" name="robot_behaviours_node" output="screen">
-        </node>         -->
+        <node pkg="cgras_robot" type="cgras_robot_server_agent.py" name="cgras_robot_server_agent" output="screen">
+        </node>   
     </group>
 
     <group if="$(arg sim_robot)">

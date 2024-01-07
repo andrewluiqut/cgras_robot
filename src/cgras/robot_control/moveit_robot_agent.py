@@ -215,13 +215,13 @@ class MoveitRobotAgent():
         self.action_lock.acquire()
         try:
             if self.agent_state != RobotAgentStates.READY:
-                rospy.logerr('MoveitAgent move_displacement: not READY state')
+                rospy.logerr('MoveitAgent move_to_position: not READY state')
                 return
             target_pose = self.move_group.get_current_pose(self.end_effector_link)
             target_pose.pose.position.x = x
             target_pose.pose.position.y = y
             target_pose.pose.position.z = z
-            target_pose.pose.orientation.w = 0      # no rotation
+            target_pose.pose.orientation.w = 0            
             self.move_group.set_pose_target(target_pose)
             self.agent_state = RobotAgentStates.BUSY
             success = self.move_group.go(wait=wait)
@@ -236,17 +236,17 @@ class MoveitRobotAgent():
         self.action_lock.acquire()
         try:
             if self.agent_state != RobotAgentStates.READY:
-                rospy.logerr('MoveitAgent move_displacement: not READY state')
+                rospy.logerr('MoveitAgent rotate_to_orientation: not READY state')
                 return
-            obj_pose = self.move_group.get_current_pose(self.end_effector_link)
+            target_pose = self.move_group.get_current_pose(self.end_effector_link)
             xyz = [
-            obj_pose.pose.position.x,
-            obj_pose.pose.position.y,
-            obj_pose.pose.position.z]
+            target_pose.pose.position.x,
+            target_pose.pose.position.y,
+            target_pose.pose.position.z]
             rpy = [roll, pitch, yaw]
             reference_link = reference_link if reference_link is not None else self.WORLD_REFERENCE_LINK
-            obj_pose = conversions.list_to_pose_stamped(xyz + rpy, reference_link)
-            self.move_group.set_pose_target(obj_pose)
+            target_pose = conversions.list_to_pose_stamped(xyz + rpy, reference_link)
+            self.move_group.set_pose_target(target_pose)
             self.agent_state = RobotAgentStates.BUSY
             success = self.move_group.go(wait=wait)
             if not wait:
@@ -257,10 +257,11 @@ class MoveitRobotAgent():
             self.action_lock.release()
     
     def move_to_position_and_orientation(self, target_pose, reference_link=None, wait=True):
+        # target_pose may be a list of 6 or 7 numbers (xyz+4q) or (xyz+rpy)
         self.action_lock.acquire()
         try:
             if self.agent_state != RobotAgentStates.READY:
-                rospy.logerr('MoveitAgent move_displacement: not READY state')
+                rospy.logerr('MoveitAgent move_to_position_and_orientation command: not READY state')
                 return
             reference_link = reference_link if reference_link is not None else self.WORLD_REFERENCE_LINK
             if type(target_pose) is list: 
@@ -399,20 +400,20 @@ if __name__ == '__main__':
     moveit_commander.roscpp_initialize(sys.argv)
     rospy.init_node("robot_control_agent", anonymous=True)
     signal.signal(signal.SIGINT, stop)
-    rospy.on_shutdown(cb_shutdown)
+    # rospy.on_shutdown(cb_shutdown)
     try:
         robot_agent = MoveitRobotAgent()
         robot_agent.current_joint_positions(print=True)
         robot_agent.current_joint_values(print=True)
         robot_agent.info(print=True)
         robot_agent.set_max_cartesian_speed(0.1)
-        # robot_agent.reset_world()
+        robot_agent.reset_world()
         # robot_agent.set_workspace_walls(-1.2, -0.87, 0.8, 0.8, 0.5, 2.0)
         # attach_tank(robot_agent)
         robot_agent.reset_path_constraints()
         rospy.sleep(1.0)
         # robot_agent.add_path_joint_constraint('shoulder_pan_joint', 0.01, 0.01, -1.31)
-        # robot_agent.move_to_named_pose('stow', wait=True)
+        robot_agent.move_to_named_pose('home', wait=True)
         # rospy.sleep(1.0)
         # robot_agent.abort_move()
         # final_state = robot_agent.wait_while_busy()
@@ -421,8 +422,9 @@ if __name__ == '__main__':
         # rospy.loginfo(f'Goal Final: {final_state}')
         robot_agent.reset()
         # robot_agent.move_displacement(0.3, 0, 0, wait=False)
-        #robot_agent.rotate(math.pi - 0.8, 0, math.pi / 2, wait=False)
-        robot_agent.move_to_position_and_orientation([0.21, 0, 1.2, math.pi, 0, 0], reference_link='the_tank')
+        # robot_agent.rotate(math.pi - 0.8, 0, math.pi / 2, wait=False)
+        # robot_agent.move_to_position(0.6, -0.55, 1.2, wait=True)
+        #robot_agent.move_to_position_and_orientation([0.21, 0.5, 1.2, math.pi, 0, 0], reference_link='the_tank')
         final_state = robot_agent.wait_while_busy()
         rospy.loginfo(f'Goal Final: {final_state}')        
     except rospy.ROSInterruptException as e:

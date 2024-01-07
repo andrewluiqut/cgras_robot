@@ -116,7 +116,7 @@ class RobotControlAgent():
 
 # ----- the main program
 if __name__ == '__main__':
-    rospy.init_node('cgras_robot_actionlib', anonymous=False)
+    rospy.init_node('cgras_robot_node', anonymous=False)
     try:
         robot_agent = RobotControlAgent()
         rospy.loginfo('robot server agent is running')

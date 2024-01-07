@@ -1,0 +1,9 @@
+work_level: 1.0
+hover_level: 1.2
+xy_swap: true
+num_tiles: [5, 1]
+num_stops: [6, 1]
+origin_position: [0.21, 0.0, 1.2]
+orientation: [-3.14, 0, 1.57]
+stop_step: [0.04, 0.05]
+
